@@ -21,6 +21,12 @@ import {
   isSupabaseConfigured,
   mapDraftRoomRow,
 } from "./lib/supabase";
+import {
+  buildShareUrl,
+  clearShareTokenFromUrl,
+  decodeShareState,
+  readShareTokenFromUrl,
+} from "./lib/shareUrl";
 import type {
   ChampionSummary,
   DraftAnalysisResponse,
@@ -285,6 +291,22 @@ function App() {
     recommendedChampionIds,
     selectedTag,
   ]);
+
+  useEffect(() => {
+    const token = readShareTokenFromUrl();
+    if (!token) {
+      return;
+    }
+    const decoded = decodeShareState(token);
+    if (decoded) {
+      setDraft(decoded.draft);
+      setPersonaMode(decoded.personaMode);
+      setSavedDraftNotice("공유 링크에서 드래프트를 불러왔습니다.");
+    } else {
+      setSavedDraftError("공유 링크를 해석할 수 없습니다. URL이 손상됐을 수 있어요.");
+    }
+    clearShareTokenFromUrl();
+  }, []);
 
   useEffect(() => {
     async function bootstrap() {
@@ -684,6 +706,25 @@ function App() {
     setSavedDraftLoading(false);
   }
 
+  async function shareCurrentDraft() {
+    const url = buildShareUrl(draft, personaMode);
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+        setSavedDraftNotice("공유 링크를 복사했습니다. 필요한 곳에 붙여 넣어주세요.");
+        setSavedDraftError(null);
+      } else {
+        window.prompt("공유 링크를 복사하세요", url);
+      }
+    } catch (error) {
+      setSavedDraftError(
+        error instanceof Error
+          ? `클립보드 복사에 실패했습니다: ${error.message}`
+          : "클립보드 복사에 실패했습니다.",
+      );
+    }
+  }
+
   function loadSavedDraft(room: StoredDraftRoom) {
     setDraft({
       blue_bans: room.blue_bans,
@@ -701,8 +742,18 @@ function App() {
 
   const bootReady = !bootLoading && !bootError;
 
+  const liveTurnSummary = currentTurn
+    ? `${currentTurn.side === "blue" ? "블루" : "레드"} ${currentTurn.action === "ban" ? "밴" : "픽"} 차례, ${currentTurn.label}, ${currentTurn.phase}`
+    : "모든 밴픽 턴이 완료되었습니다.";
+
   return (
     <div className="app-shell">
+      <a href="#main-content" className="skip-link">
+        본문으로 건너뛰기
+      </a>
+      <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {liveTurnSummary}
+      </div>
       <header className="topbar">
         <div>
           <p className="eyebrow">Draft Intelligence Workspace</p>
@@ -749,7 +800,7 @@ function App() {
         </section>
       ) : (
         <>
-          <div className="workspace-grid">
+          <div className="workspace-grid" id="main-content">
             <div className="workspace-main">
               <DraftBoard
                 draft={draft}
@@ -760,6 +811,7 @@ function App() {
                 onUndo={undoLastAction}
                 onReset={resetDraft}
                 onLoadSample={loadSampleDraft}
+                onShare={shareCurrentDraft}
               />
 
               <ChampionPanel
@@ -832,11 +884,16 @@ function App() {
             </aside>
           </div>
 
-          <footer className="legal-banner">
+          <footer className="legal-banner" aria-label="법적 고지">
             <div>
+              <strong>LoL Draft Lab은 Riot Games의 공식 제품이 아닙니다.</strong>{" "}
               이 서비스는 실제 게임 세션 중 실시간 우위를 제공하는 도구가 아니라,
-              드래프트 학습과 스크림 리뷰를 위한 사전 시뮬레이션 워크스페이스를
-              목표로 합니다.
+              드래프트 학습과 스크림 리뷰를 위한 사전 시뮬레이션 워크스페이스입니다.
+            </div>
+            <div>
+              챔피언 초상화와 이름은 Riot Games의 Data Dragon 공개 자산을
+              이용하며, League of Legends 관련 지식재산권은 Riot Games, Inc.에
+              귀속됩니다. (© Riot Games, Inc.)
             </div>
             <div>
               공개 베타 전 체크: Riot production key 승인, 약관/개인정보 처리방침

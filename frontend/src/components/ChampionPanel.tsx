@@ -63,19 +63,27 @@ export function ChampionPanel({
         <label className="search-field">
           <span>챔피언 검색</span>
           <input
+            type="search"
             value={search}
             onChange={(event) => onSearchChange(event.target.value)}
             placeholder="한국어 이름, 영문 ID, 태그 검색"
+            aria-label="챔피언 검색"
           />
         </label>
 
         <div className="search-field">
-          <span>포지션 초점</span>
-          <div className="role-filter-row">
+          <span id="role-filter-label">포지션 초점</span>
+          <div
+            className="role-filter-row"
+            role="radiogroup"
+            aria-labelledby="role-filter-label"
+          >
             {roleFilters.map((role) => (
               <button
                 key={role}
                 type="button"
+                role="radio"
+                aria-checked={focusRole === role}
                 className={`role-chip ${focusRole === role ? "is-active" : ""}`}
                 onClick={() => onFocusRoleChange(role)}
               >
@@ -88,12 +96,18 @@ export function ChampionPanel({
 
       <div className="champion-panel-filters">
         <div className="filter-group">
-          <span>태그 필터</span>
-          <div className="role-filter-row">
+          <span id="tag-filter-label">태그 필터</span>
+          <div
+            className="role-filter-row"
+            role="radiogroup"
+            aria-labelledby="tag-filter-label"
+          >
             {tagFilters.map((tag) => (
               <button
                 key={tag}
                 type="button"
+                role="radio"
+                aria-checked={selectedTag === tag}
                 className={`role-chip ${selectedTag === tag ? "is-active" : ""}`}
                 onClick={() => onSelectedTagChange(tag)}
               >
@@ -104,12 +118,18 @@ export function ChampionPanel({
         </div>
 
         <div className="filter-group">
-          <span>보기 방식</span>
-          <div className="role-filter-row">
+          <span id="pool-filter-label">보기 방식</span>
+          <div
+            className="role-filter-row"
+            role="radiogroup"
+            aria-labelledby="pool-filter-label"
+          >
             {poolModes.map((mode) => (
               <button
                 key={mode.id}
                 type="button"
+                role="radio"
+                aria-checked={poolView === mode.id}
                 className={`role-chip ${poolView === mode.id ? "is-active" : ""}`}
                 onClick={() => onPoolViewChange(mode.id)}
               >
@@ -120,7 +140,11 @@ export function ChampionPanel({
         </div>
       </div>
 
-      <div className="champion-grid">
+      <div
+        className="champion-grid"
+        role="list"
+        aria-label={`선택 가능한 챔피언 ${champions.length}명`}
+      >
         {champions.map((champion) => {
           const isPreferred = preferredChampionIds.includes(champion.id);
           const isRecommended = recommendedChampionIds.has(champion.id.toLowerCase());
@@ -128,13 +152,16 @@ export function ChampionPanel({
           return (
             <article
               key={champion.id}
+              role="listitem"
+              aria-label={`${champion.name} ${champion.title}${isRecommended ? ", 추천 후보" : ""}${isPreferred ? ", 선호 챔피언" : ""}`}
               className={`champion-card ${isPreferred ? "is-preferred" : ""} ${isRecommended ? "is-recommended" : ""}`}
             >
               <div className="champion-splash">
                 {ddragonVersion ? (
                   <img
                     src={`https://ddragon.leagueoflegends.com/cdn/${ddragonVersion}/img/champion/${champion.image}`}
-                    alt={champion.name}
+                    alt=""
+                    aria-hidden="true"
                     loading="lazy"
                   />
                 ) : null}
@@ -153,9 +180,10 @@ export function ChampionPanel({
                   type="button"
                   className={`favorite-button ${isPreferred ? "is-active" : ""}`}
                   onClick={() => onTogglePreferredChampion(champion.id)}
-                  title="선호 챔피언 토글"
+                  aria-label={`${champion.name} 선호 챔피언 ${isPreferred ? "해제" : "추가"}`}
+                  aria-pressed={isPreferred}
                 >
-                  ★
+                  <span aria-hidden="true">★</span>
                 </button>
               </div>
 

@@ -39,11 +39,17 @@ export function PersonaModeStrip({
         </div>
       </div>
 
-      <div className="persona-chip-grid">
+      <div
+        className="persona-chip-grid"
+        role="radiogroup"
+        aria-label="페르소나 모드 선택"
+      >
         {ORDER.map((mode) => (
           <button
             key={mode}
             type="button"
+            role="radio"
+            aria-checked={personaMode === mode}
             className={`persona-chip ${personaMode === mode ? "is-active" : ""}`}
             onClick={() => onChange(mode)}
           >

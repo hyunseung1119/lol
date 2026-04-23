@@ -9,6 +9,7 @@ type DraftBoardProps = {
   onUndo: () => void;
   onReset: () => void;
   onLoadSample: () => void;
+  onShare: () => void;
 };
 
 export function DraftBoard({
@@ -20,6 +21,7 @@ export function DraftBoard({
   onUndo,
   onReset,
   onLoadSample,
+  onShare,
 }: DraftBoardProps) {
   return (
     <section className="board-panel">
@@ -30,6 +32,9 @@ export function DraftBoard({
         </div>
 
         <div
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
           className={`board-current-turn ${currentTurn?.side === "red" ? "is-red" : "is-blue"}`}
         >
           <span>{currentTurn ? "지금 행동" : "상태"}</span>
@@ -73,6 +78,9 @@ export function DraftBoard({
         </button>
         <button type="button" className="ghost-button" onClick={onLoadSample}>
           예시 드래프트 불러오기
+        </button>
+        <button type="button" className="ghost-button" onClick={onShare}>
+          공유 링크 복사
         </button>
         <button type="button" className="ghost-button" onClick={onReset}>
           전체 초기화
@@ -215,7 +223,7 @@ function SlotPortrait({
     <img
       className={`slot-image ${tone}`}
       src={`https://ddragon.leagueoflegends.com/cdn/${ddragonVersion}/img/champion/${champion.image}`}
-      alt={champion.name}
+      alt={`${champion.name} ${tone === "is-ban" ? "밴" : "픽"}`}
       loading="lazy"
     />
   );

@@ -81,10 +81,18 @@ export function AuthPanel({
       )}
 
       {authError ? (
-        <div className="status-message is-error">{authError}</div>
+        <div role="alert" className="status-message is-error">
+          {authError}
+        </div>
       ) : null}
       {authNotice ? (
-        <div className="status-message is-success">{authNotice}</div>
+        <div
+          role="status"
+          aria-live="polite"
+          className="status-message is-success"
+        >
+          {authNotice}
+        </div>
       ) : null}
     </section>
   );

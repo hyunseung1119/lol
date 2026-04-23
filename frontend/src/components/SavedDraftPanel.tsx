@@ -94,30 +94,51 @@ export function SavedDraftPanel({
           <span>현재 조합을 저장하면 여기에서 다시 불러올 수 있습니다.</span>
         </div>
       ) : (
-        <div className="saved-draft-list">
-          {savedDrafts.map((room) => (
-            <button
-              key={room.id}
-              type="button"
-              className={`saved-draft-item ${activeDraftRoomId === room.id ? "is-active" : ""}`}
-              onClick={() => onLoadSavedDraft(room)}
-            >
-              <div className="saved-draft-head">
-                <strong>{room.title}</strong>
-                <span>{formatDraftTime(room.updated_at)}</span>
-              </div>
-              <div className="saved-draft-meta">
-                <span>{room.patch} 패치</span>
-                <span>{room.persona_mode}</span>
-                <span>{room.blue_picks.length + room.red_picks.length}픽</span>
-              </div>
-            </button>
-          ))}
-        </div>
+        <ul
+          className="saved-draft-list"
+          aria-label={`저장된 드래프트 ${savedDrafts.length}개`}
+        >
+          {savedDrafts.map((room) => {
+            const isActive = activeDraftRoomId === room.id;
+            return (
+              <li key={room.id}>
+                <button
+                  type="button"
+                  className={`saved-draft-item ${isActive ? "is-active" : ""}`}
+                  aria-current={isActive ? "true" : undefined}
+                  aria-label={`${room.title}, ${room.patch} 패치, ${room.blue_picks.length + room.red_picks.length}픽${isActive ? ", 현재 불러와짐" : ""}`}
+                  onClick={() => onLoadSavedDraft(room)}
+                >
+                  <div className="saved-draft-head">
+                    <strong>{room.title}</strong>
+                    <span>{formatDraftTime(room.updated_at)}</span>
+                  </div>
+                  <div className="saved-draft-meta">
+                    <span>{room.patch} 패치</span>
+                    <span>{room.persona_mode}</span>
+                    <span>{room.blue_picks.length + room.red_picks.length}픽</span>
+                  </div>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
       )}
 
-      {error ? <div className="status-message is-error">{error}</div> : null}
-      {notice ? <div className="status-message is-success">{notice}</div> : null}
+      {error ? (
+        <div role="alert" className="status-message is-error">
+          {error}
+        </div>
+      ) : null}
+      {notice ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="status-message is-success"
+        >
+          {notice}
+        </div>
+      ) : null}
     </section>
   );
 }

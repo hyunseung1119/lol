@@ -17,10 +17,10 @@ export function InsightPanel({
 }: InsightPanelProps) {
   if (analysisError) {
     return (
-      <section className="insight-panel">
-        <div className="empty-card">
+      <section className="insight-panel" aria-labelledby="insight-error-heading">
+        <div className="empty-card" role="alert">
           <p className="eyebrow">Analysis Error</p>
-          <h2>추천 분석을 불러오지 못했습니다</h2>
+          <h2 id="insight-error-heading">추천 분석을 불러오지 못했습니다</h2>
           <p>{analysisError}</p>
         </div>
       </section>
@@ -49,7 +49,12 @@ export function InsightPanel({
           <p className="eyebrow">Model Output</p>
           <h2>추천과 설명</h2>
         </div>
-        <div className="board-current-turn">
+        <div
+          className="board-current-turn"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
           <span>분석 상태</span>
           <strong>{analyzing ? "갱신 중" : "최신 추천 반영"}</strong>
           <div className="board-slot-subcopy">

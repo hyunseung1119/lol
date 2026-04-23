@@ -19,25 +19,41 @@ export function TurnTimeline({ turns, filledTurnCount }: TurnTimelineProps) {
         </p>
       </div>
 
-      <div className="timeline-track">
+      <ol
+        className="timeline-track"
+        aria-label={`토너먼트 드래프트 ${turns.length}턴, 현재 ${Math.min(filledTurnCount + 1, turns.length)}번째 턴`}
+      >
         {turns.map((turn, index) => {
-          const stateClass =
-            index < filledTurnCount
-              ? "is-done"
-              : index === filledTurnCount
-                ? turn.side === "blue"
-                  ? "is-current-blue"
-                  : "is-current-red"
-                : "";
+          const isDone = index < filledTurnCount;
+          const isCurrent = index === filledTurnCount;
+          const stateClass = isDone
+            ? "is-done"
+            : isCurrent
+              ? turn.side === "blue"
+                ? "is-current-blue"
+                : "is-current-red"
+              : "";
+          const stateLabel = isDone
+            ? "완료"
+            : isCurrent
+              ? "현재 턴"
+              : "대기";
+          const sideLabel = turn.side === "blue" ? "블루" : "레드";
+          const actionLabel = turn.action === "ban" ? "밴" : "픽";
 
           return (
-            <article key={`${turn.label}-${index}`} className={`timeline-node ${stateClass}`}>
+            <li
+              key={`${turn.label}-${index}`}
+              className={`timeline-node ${stateClass}`}
+              aria-current={isCurrent ? "step" : undefined}
+              aria-label={`${turn.label}, ${sideLabel} ${actionLabel}, ${turn.phase}, ${stateLabel}`}
+            >
               <strong>{turn.label}</strong>
               <span>{turn.phase}</span>
-            </article>
+            </li>
           );
         })}
-      </div>
+      </ol>
     </section>
   );
 }
