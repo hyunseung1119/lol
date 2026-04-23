@@ -1,0 +1,13 @@
+{
+  "name": "lol-draft-lab",
+  "private": true,
+  "engines": {
+    "node": "20.x"
+  },
+  "scripts": {
+    "dev": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build",
+    "preview": "npm --prefix frontend run preview",
+    "postinstall": "npm --prefix frontend install"
+  }
+}
