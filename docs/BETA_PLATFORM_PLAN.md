@@ -33,6 +33,10 @@
 - Root Directory: `./`
 - Build Command: `npm run build`
 - Output Directory: `frontend/dist`
+- Environment Variables:
+  - `VITE_API_BASE_URL=https://<your-backend-domain>/api`
+  - `VITE_SUPABASE_URL=https://<your-project>.supabase.co`
+  - `VITE_SUPABASE_ANON_KEY=<public-anon-key>`
 
 ### 2. Supabase
 
@@ -52,6 +56,12 @@
 1. 베타 1차: 휴리스틱 엔진 결과만 저장, LLM 설명은 선택 기능
 2. 베타 2차: 별도 Python API 또는 GPU 워커로 설명 생성 분리
 3. production-key 승인 후: Riot 데이터 수집 파이프라인 추가
+
+중요:
+
+- 현재 Vercel에 올라간 프론트는 정적 빌드입니다.
+- 백엔드 주소를 `VITE_API_BASE_URL`로 주지 않으면 사용자의 브라우저는 로컬호스트를 호출할 수 없어서 실제 기능이 동작하지 않습니다.
+- 공개 베타에서는 프론트와 별도로 API를 배포해야 합니다.
 
 ## Supabase에서 바로 할 수 있는 것
 

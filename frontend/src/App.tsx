@@ -21,7 +21,9 @@ import type {
   Role,
 } from "./types";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000/api";
+const PROD_API_BASE = import.meta.env.VITE_API_BASE_URL;
+const DEV_API_BASE = "http://127.0.0.1:8000/api";
+const API_BASE = PROD_API_BASE ?? DEV_API_BASE;
 
 const TOURNAMENT_SEQUENCE: DraftTurn[] = [
   { side: "blue", action: "ban", label: "B 밴 1", phase: "1차 밴", sequenceIndex: 0 },
@@ -259,6 +261,14 @@ function App() {
   ]);
 
   useEffect(() => {
+    if (!import.meta.env.DEV && !PROD_API_BASE) {
+      setBootError(
+        "현재 배포에는 API가 연결되지 않았습니다. Vercel 환경 변수 `VITE_API_BASE_URL`에 배포된 백엔드 주소를 설정하세요.",
+      );
+      setBootLoading(false);
+      return;
+    }
+
     async function bootstrap() {
       setBootLoading(true);
       setBootError(null);
