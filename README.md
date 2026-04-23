@@ -37,6 +37,7 @@
 
 - `RIOT_API_KEY`는 저장소에 커밋하지 않습니다.
 - 공개 베타에는 development key를 절대 사용하지 않습니다.
+- 현재 공개 베타 API 기본값은 `https://lol-draft-lab-api.vercel.app/api`입니다.
 
 ### 2. 백엔드
 
