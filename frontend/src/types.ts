@@ -116,3 +116,22 @@ export type DraftState = {
   blue_picks: DraftPickInput[];
   red_picks: DraftPickInput[];
 };
+
+export type StoredDraftRoom = {
+  id: string;
+  title: string;
+  patch: string;
+  persona_mode: PersonaMode;
+  side_to_act: TeamSide;
+  action_type: DraftActionType;
+  updated_at: string;
+  blue_bans: string[];
+  red_bans: string[];
+  blue_picks: DraftPickInput[];
+  red_picks: DraftPickInput[];
+  preferred_champions: string[];
+  blue_estimated_win_rate: number | null;
+  red_estimated_win_rate: number | null;
+  confidence: number | null;
+  explanation: string | null;
+};

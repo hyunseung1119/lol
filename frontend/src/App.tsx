@@ -5,12 +5,22 @@ import {
   useMemo,
   useState,
 } from "react";
+import type { Session } from "@supabase/supabase-js";
+import { AuthPanel } from "./components/AuthPanel";
 import { ChampionPanel } from "./components/ChampionPanel";
 import { DraftBoard } from "./components/DraftBoard";
 import { InsightPanel } from "./components/InsightPanel";
 import { MetaStrip } from "./components/MetaStrip";
 import { PersonaModeStrip } from "./components/PersonaModeStrip";
+import { SavedDraftPanel } from "./components/SavedDraftPanel";
 import { TurnTimeline } from "./components/TurnTimeline";
+import {
+  DRAFT_ROOM_SELECT,
+  type DraftRoomRow,
+  getSupabaseBrowserClient,
+  isSupabaseConfigured,
+  mapDraftRoomRow,
+} from "./lib/supabase";
 import type {
   ChampionSummary,
   DraftAnalysisResponse,
@@ -19,6 +29,7 @@ import type {
   MetaResponse,
   PersonaMode,
   Role,
+  StoredDraftRoom,
 } from "./types";
 
 const DEFAULT_PROD_API_BASE = "https://lol-draft-lab-api.vercel.app/api";
@@ -154,6 +165,7 @@ type ChampionTagFilter = (typeof TAG_FILTERS)[number];
 type PoolViewMode = (typeof POOL_MODES)[number]["id"];
 
 function App() {
+  const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   const [meta, setMeta] = useState<MetaResponse | null>(null);
   const [champions, setChampions] = useState<ChampionSummary[]>([]);
   const [draft, setDraft] = useState<DraftState>(EMPTY_DRAFT);
@@ -161,13 +173,25 @@ function App() {
   const [focusRole, setFocusRole] = useState<Role>("FLEX");
   const [personaMode, setPersonaMode] = useState<PersonaMode>("general");
   const [preferredChampionIds, setPreferredChampionIds] = useState<string[]>([]);
+  const [draftTitle, setDraftTitle] = useState("새 드래프트");
+  const [activeDraftRoomId, setActiveDraftRoomId] = useState<string | null>(null);
+  const [savedDrafts, setSavedDrafts] = useState<StoredDraftRoom[]>([]);
   const [search, setSearch] = useState("");
   const [selectedTag, setSelectedTag] = useState<ChampionTagFilter>("ALL");
   const [poolView, setPoolView] = useState<PoolViewMode>("all");
   const [bootLoading, setBootLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
+  const [authLoading, setAuthLoading] = useState(isSupabaseConfigured);
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authEmail, setAuthEmail] = useState("");
+  const [session, setSession] = useState<Session | null>(null);
   const [bootError, setBootError] = useState<string | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authNotice, setAuthNotice] = useState<string | null>(null);
+  const [savedDraftLoading, setSavedDraftLoading] = useState(false);
+  const [savedDraftError, setSavedDraftError] = useState<string | null>(null);
+  const [savedDraftNotice, setSavedDraftNotice] = useState<string | null>(null);
 
   const deferredSearch = useDeferredValue(search);
   const activePersona = PERSONA_PRESETS[personaMode];
@@ -294,6 +318,50 @@ function App() {
 
     void bootstrap();
   }, []);
+
+  useEffect(() => {
+    if (!supabase) {
+      setAuthLoading(false);
+      return;
+    }
+
+    let active = true;
+
+    void supabase.auth.getSession().then(({ data, error }) => {
+      if (!active) {
+        return;
+      }
+
+      if (error) {
+        setAuthError(error.message);
+      }
+
+      setSession(data.session ?? null);
+      setAuthLoading(false);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession ?? null);
+      setAuthLoading(false);
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, [supabase]);
+
+  useEffect(() => {
+    if (!supabase || !session) {
+      setSavedDrafts([]);
+      return;
+    }
+
+    void ensureProfile(session);
+    void refreshSavedDrafts();
+  }, [session, supabase]);
 
   useEffect(() => {
     if (!meta) {
@@ -435,9 +503,12 @@ function App() {
     setFocusRole("FLEX");
     setPersonaMode("general");
     setPreferredChampionIds([]);
+    setDraftTitle("새 드래프트");
+    setActiveDraftRoomId(null);
     setSearch("");
     setSelectedTag("ALL");
     setPoolView("all");
+    setSavedDraftNotice(null);
   }
 
   function loadSampleDraft() {
@@ -445,6 +516,8 @@ function App() {
     setFocusRole("BOTTOM");
     setPersonaMode("coach");
     setPreferredChampionIds(["Caitlyn", "Rell"]);
+    setDraftTitle("스크림 예시 밴픽");
+    setActiveDraftRoomId(null);
     setSelectedTag("Marksman");
     setPoolView("recommended");
   }
@@ -455,6 +528,175 @@ function App() {
         ? current.filter((id) => id !== championId)
         : [...current, championId],
     );
+  }
+
+  async function ensureProfile(currentSession: Session) {
+    if (!supabase) {
+      return;
+    }
+
+    const { error } = await supabase.from("profiles").upsert(
+      {
+        id: currentSession.user.id,
+        display_name:
+          currentSession.user.user_metadata.full_name ??
+          currentSession.user.email?.split("@")[0] ??
+          null,
+        default_persona: personaMode,
+      },
+      { onConflict: "id" },
+    );
+
+    if (error) {
+      setAuthError(error.message);
+    }
+  }
+
+  async function refreshSavedDrafts() {
+    if (!supabase || !session) {
+      return;
+    }
+
+    setSavedDraftLoading(true);
+    setSavedDraftError(null);
+
+    const { data, error } = await supabase
+      .from("draft_rooms")
+      .select(DRAFT_ROOM_SELECT)
+      .order("updated_at", { ascending: false })
+      .limit(8);
+
+    if (error) {
+      setSavedDraftError(error.message);
+      setSavedDraftLoading(false);
+      return;
+    }
+
+    const rows = (data ?? []) as DraftRoomRow[];
+    setSavedDrafts(rows.map(mapDraftRoomRow));
+    setSavedDraftLoading(false);
+  }
+
+  async function requestMagicLink() {
+    if (!supabase || authEmail.trim().length === 0) {
+      return;
+    }
+
+    setAuthBusy(true);
+    setAuthError(null);
+    setAuthNotice(null);
+
+    const { error } = await supabase.auth.signInWithOtp({
+      email: authEmail.trim(),
+      options: {
+        emailRedirectTo: window.location.href,
+      },
+    });
+
+    if (error) {
+      setAuthError(error.message);
+    } else {
+      setAuthNotice("로그인 링크를 이메일로 보냈습니다.");
+    }
+
+    setAuthBusy(false);
+  }
+
+  async function signOut() {
+    if (!supabase) {
+      return;
+    }
+
+    setAuthBusy(true);
+    setAuthError(null);
+    setAuthNotice(null);
+
+    const { error } = await supabase.auth.signOut();
+
+    if (error) {
+      setAuthError(error.message);
+    } else {
+      setAuthNotice("로그아웃했습니다.");
+      setSavedDrafts([]);
+    }
+
+    setAuthBusy(false);
+  }
+
+  async function saveCurrentDraft() {
+    if (!supabase || !session) {
+      setSavedDraftError("Supabase 로그인 후 저장할 수 있습니다.");
+      return;
+    }
+
+    setSavedDraftLoading(true);
+    setSavedDraftError(null);
+    setSavedDraftNotice(null);
+
+    const title = draftTitle.trim() || `${meta?.patch ?? "26.8"} 드래프트`;
+    const payload = {
+      title,
+      created_by: session.user.id,
+      queue_type: "tournament",
+      patch: meta?.patch ?? "26.8",
+      persona_mode: personaMode,
+      side_to_act: currentTurn?.side ?? "blue",
+      action_type: currentTurn?.action ?? "pick",
+      status: currentTurn ? "drafting" : "locked",
+      blue_bans: draft.blue_bans,
+      red_bans: draft.red_bans,
+      blue_picks: draft.blue_picks,
+      red_picks: draft.red_picks,
+      preferred_champions: preferredChampionIds,
+      blue_estimated_win_rate: analysis?.blue_estimated_win_rate ?? null,
+      red_estimated_win_rate: analysis?.red_estimated_win_rate ?? null,
+      confidence: analysis?.confidence ?? null,
+      explanation: analysis?.explanation ?? null,
+      is_public_share: false,
+    };
+
+    const query = activeDraftRoomId
+      ? supabase
+          .from("draft_rooms")
+          .update(payload)
+          .eq("id", activeDraftRoomId)
+          .select(DRAFT_ROOM_SELECT)
+          .single()
+      : supabase
+          .from("draft_rooms")
+          .insert(payload)
+          .select(DRAFT_ROOM_SELECT)
+          .single();
+
+    const { data, error } = await query;
+
+    if (error) {
+      setSavedDraftError(error.message);
+      setSavedDraftLoading(false);
+      return;
+    }
+
+    const mapped = mapDraftRoomRow(data as DraftRoomRow);
+    setDraftTitle(mapped.title);
+    setActiveDraftRoomId(mapped.id);
+    setSavedDraftNotice("현재 드래프트를 저장했습니다.");
+    await refreshSavedDrafts();
+    setSavedDraftLoading(false);
+  }
+
+  function loadSavedDraft(room: StoredDraftRoom) {
+    setDraft({
+      blue_bans: room.blue_bans,
+      red_bans: room.red_bans,
+      blue_picks: room.blue_picks,
+      red_picks: room.red_picks,
+    });
+    setPersonaMode(room.persona_mode);
+    setPreferredChampionIds(room.preferred_champions);
+    setDraftTitle(room.title);
+    setActiveDraftRoomId(room.id);
+    setSavedDraftNotice("저장한 드래프트를 불러왔습니다.");
+    setSavedDraftError(null);
   }
 
   const bootReady = !bootLoading && !bootError;
@@ -545,6 +787,35 @@ function App() {
             </div>
 
             <aside className="workspace-side">
+              <AuthPanel
+                configured={isSupabaseConfigured}
+                authLoading={authLoading}
+                authBusy={authBusy}
+                authEmail={authEmail}
+                sessionEmail={session?.user.email ?? null}
+                authError={authError}
+                authNotice={authNotice}
+                onAuthEmailChange={setAuthEmail}
+                onRequestMagicLink={requestMagicLink}
+                onSignOut={signOut}
+              />
+
+              <SavedDraftPanel
+                configured={isSupabaseConfigured}
+                isAuthenticated={Boolean(session)}
+                roomTitle={draftTitle}
+                savedDrafts={savedDrafts}
+                activeDraftRoomId={activeDraftRoomId}
+                loading={savedDraftLoading}
+                error={savedDraftError}
+                notice={savedDraftNotice}
+                onRoomTitleChange={setDraftTitle}
+                onSave={saveCurrentDraft}
+                onRefresh={refreshSavedDrafts}
+                onLoadSavedDraft={loadSavedDraft}
+                onNewDraft={resetDraft}
+              />
+
               <PersonaModeStrip
                 personaMode={personaMode}
                 presets={PERSONA_PRESETS}
