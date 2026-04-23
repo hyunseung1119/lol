@@ -1,12 +1,56 @@
 from __future__ import annotations
 
+import hashlib
+from collections import OrderedDict
+
 from app.models import DraftActionType, DraftAnalysisRequest, DraftAnalysisResponse
 from app.services.ollama_client import OllamaClient
+
+
+_EXPLANATION_CACHE_SIZE = 256
+
+
+class _ExplanationCache:
+    """Bounded LRU that skips the Ollama round-trip for identical prompts."""
+
+    def __init__(self, max_size: int) -> None:
+        self._store: "OrderedDict[str, str]" = OrderedDict()
+        self._max_size = max_size
+        self.hits = 0
+        self.misses = 0
+
+    def get(self, key: str) -> str | None:
+        value = self._store.get(key)
+        if value is None:
+            self.misses += 1
+            return None
+        self._store.move_to_end(key)
+        self.hits += 1
+        return value
+
+    def set(self, key: str, value: str) -> None:
+        self._store[key] = value
+        self._store.move_to_end(key)
+        while len(self._store) > self._max_size:
+            self._store.popitem(last=False)
+
+
+def _cache_key(system_prompt: str, user_prompt: str) -> str:
+    digest = hashlib.sha256()
+    digest.update(system_prompt.encode("utf-8"))
+    digest.update(b"\x1f")
+    digest.update(user_prompt.encode("utf-8"))
+    return digest.hexdigest()
 
 
 class DraftExplainer:
     def __init__(self, *, ollama_client: OllamaClient) -> None:
         self._ollama_client = ollama_client
+        self._cache = _ExplanationCache(max_size=_EXPLANATION_CACHE_SIZE)
+
+    @property
+    def cache_stats(self) -> dict[str, int]:
+        return {"hits": self._cache.hits, "misses": self._cache.misses}
 
     async def explain(
         self,
@@ -44,14 +88,23 @@ class DraftExplainer:
 3. 왜 그런지 한두 문장
 4. 마지막에 '한 줄 액션:'으로 시작하는 문장 하나
 """
+        normalized_user_prompt = user_prompt.strip()
+        cache_key = _cache_key(system_prompt, normalized_user_prompt)
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         try:
             message = await self._ollama_client.generate_text(
                 system_prompt=system_prompt,
-                user_prompt=user_prompt.strip(),
+                user_prompt=normalized_user_prompt,
             )
-            return message or self._fallback(analysis)
+            result = message or self._fallback(analysis)
         except Exception:
-            return self._fallback(analysis)
+            result = self._fallback(analysis)
+
+        self._cache.set(cache_key, result)
+        return result
 
     def _fallback(self, analysis: DraftAnalysisResponse) -> str:
         primary_pick = analysis.top_picks[0] if analysis.top_picks else None
